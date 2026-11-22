@@ -157,7 +157,7 @@
     busy = true;
     setPinMsg("Checking...", false);
     try {
-      const res = await fetch(SUPABASE_URL + "/functions/v1/staff-login", {
+      const res = await fetch(SUPABASE_URL + "/functions/v1/Staff-login", {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
         body: JSON.stringify({ staff_id: chosenStaff.id, pin }),
