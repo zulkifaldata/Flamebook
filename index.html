@@ -78,7 +78,7 @@
   // ====== EDIT THESE 3 LINES ======
   const SUPABASE_URL  = "https://yqhvegqrtgtnhjrtjzhi.supabase.co";            // e.g. https://abcdxyz.supabase.co
   const SUPABASE_KEY  = "sb_publishable_bMPAfVEyj2GVTESsIyw1oA_NrOSnsuZ";; // public key only. NEVER the secret / service_role key
-  const BUSINESS_SLUG = "hussain-lpg-traders";
+  const BUSINESS_SLUG = new URLSearchParams(location.search).get("b") || "";
   // =================================
 
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
