@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlameBook Owner</title>
+<style>
+  body{margin:0;font-family:system-ui,Arial,sans-serif;background:#f6f7f9;color:#1b1f24}
+  main{max-width:460px;margin:0 auto;padding:20px 16px 40px}
+  h1{color:#e8590c;margin:6px 0}h2{font-size:17px;margin:20px 0 8px}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:12px}
+  input,select{width:100%;padding:11px;font-size:16px;border:1px solid #d1d5db;border-radius:10px;margin:4px 0;box-sizing:border-box}
+  button{padding:10px 14px;font-size:15px;border:none;border-radius:10px;background:#e8590c;color:#fff;margin:4px 4px 4px 0}
+  button.g{background:#fff;color:#1b1f24;border:1px solid #d1d5db}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:8px 0;border-top:1px solid #eee}
+  .msg{min-height:20px;font-size:14px;color:#b91c1c}.ok{color:#15803d}.hide{display:none}
+  #link{word-break:break-all;font-size:14px;color:#c2410c}
+</style>
+</head>
+<body><main>
+<h1>FlameBook Owner</h1>
+<div class="msg" id="msg"></div>
+
+<div id="auth" class="card hide">
+  <input id="email" type="email" placeholder="Email">
+  <input id="pass" type="password" placeholder="Password (min 6 characters)">
+  <input id="bname" placeholder="Business name (only for Create account), e.g. Noor LPG">
+  <button id="login">Login</button><button class="g" id="signup">Create account</button>
+</div>
+
+<div id="mk" class="card hide">
+  <strong>Create your business</strong>
+  <input id="mkname" placeholder="Business name"><button id="mkgo">Create</button>
+</div>
+
+<div id="panel" class="hide">
+  <div class="card"><strong>Business name</strong>
+    <input id="nm"><button id="savenm">Save</button>
+    <p style="margin:10px 0 2px">Staff login link (share with your staff):</p><div id="link"></div></div>
+  <h2>Branches</h2><div class="card"><div id="branches"></div>
+    <input id="newbr" placeholder="New branch name"><button id="addbr">Add branch</button></div>
+  <h2>Staff</h2><div class="card"><div id="staff"></div>
+    <input id="newst" placeholder="Staff name"><select id="stbr"></select>
+    <button id="addst">Add staff</button></div>
+  <button class="g" id="out">Logout</button>
+</div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+  // ====== USE THE SAME 2 VALUES AS IN index.html ======
+  const SUPABASE_URL = "PASTE_PROJECT_URL_HERE";
+  const SUPABASE_KEY = "PASTE_PUBLISHABLE_KEY_HERE";
+  // =====================================================
+  const $ = (i) => document.getElementById(i);
+  const say = (t, ok) => { $("msg").textContent = t || ""; $("msg").className = "msg" + (ok ? " ok" : ""); };
+  if (typeof supabase === "undefined" || SUPABASE_URL.indexOf("PASTE") === 0) { say("Edit the URL and key at the top of admin.html."); throw new Error("config"); }
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  let biz = null;
+
+  const row = (text, btns) => {
+    const d = document.createElement("div"); d.className = "row";
+    const s = document.createElement("span"); s.textContent = text; d.appendChild(s);
+    const w = document.createElement("span");
+    btns.forEach(([t, f]) => { const b = document.createElement("button"); b.className = "g"; b.textContent = t; b.onclick = f; w.appendChild(b); });
+    d.appendChild(w); return d;
+  };
+  const ui = (a, m, p) => { $("auth").classList.toggle("hide", !a); $("mk").classList.toggle("hide", !m); $("panel").classList.toggle("hide", !p); };
+
+  async function load() {
+    const { data: s } = await sb.auth.getSession();
+    if (!s.session) return ui(true, false, false);
+    const { data: b } = await sb.from("businesses").select("id,name,slug").maybeSingle();
+    if (!b) return ui(false, true, false);
+    biz = b; ui(false, false, true);
+    $("nm").value = b.name;
+    $("link").textContent = location.href.replace(/admin\.html.*$/, "") + "index.html?b=" + b.slug;
+    const { data: br } = await sb.from("branches").select("id,name").order("created_at");
+    $("branches").innerHTML = ""; $("stbr").innerHTML = "";
+    (br || []).forEach((x) => {
+      $("branches").appendChild(row(x.name, [["Rename", async () => {
+        const n = prompt("New branch name", x.name); if (!n) return;
+        const { error } = await sb.from("branches").update({ name: n.trim() }).eq("id", x.id);
+        error ? say("Could not rename.") : load();
+      }]]));
+      const o = document.createElement("option"); o.value = x.id; o.textContent = x.name; $("stbr").appendChild(o);
+    });
+    const { data: st } = await sb.from("staff").select("id,name,active,branches(name)").order("created_at");
+    $("staff").innerHTML = "";
+    (st || []).forEach((x) => {
+      $("staff").appendChild(row(x.name + " (" + (x.branches ? x.branches.name : "") + ")" + (x.active ? "" : " - removed"), [
+        ["Set PIN", () => setPin(x)],
+        [x.active ? "Remove" : "Restore", async () => {
+          await sb.from("staff").update({ active: !x.active }).eq("id", x.id); load();
+        }],
+      ]));
+    });
+  }
+
+  async function setPin(x) {
+    const pin = prompt("New 4-digit PIN for " + x.name);
+    if (!pin) return;
+    if (!/^[0-9]{4}$/.test(pin)) return say("PIN must be exactly 4 digits.");
+    const { data: s } = await sb.auth.getSession();
+    const r = await fetch(SUPABASE_URL + "/functions/v1/set-pin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: "Bearer " + s.session.access_token },
+      body: JSON.stringify({ staff_id: x.id, pin }),
+    });
+    r.ok ? say("PIN saved for " + x.name, true) : say("Could not save PIN.");
+  }
+
+  async function makeBiz(name) {
+    if (!name.trim()) return say("Enter a business name.");
+    const { error } = await sb.rpc("create_business", { p_name: name });
+    error ? say(error.message) : (say("Business created.", true), load());
+  }
+
+  $("login").onclick = async () => {
+    const { error } = await sb.auth.signInWithPassword({ email: $("email").value.trim(), password: $("pass").value });
+    error ? say("Wrong email or password.") : (say(""), load());
+  };
+  $("signup").onclick = async () => {
+    const name = $("bname").value;
+    if (!name.trim()) return say("Enter your business name first.");
+    const { data, error } = await sb.auth.signUp({ email: $("email").value.trim(), password: $("pass").value });
+    if (error) return say(error.message);
+    if (!data.session) return say("Check your email to confirm, then login.", true);
+    await makeBiz(name);
+  };
+  $("mkgo").onclick = () => makeBiz($("mkname").value);
+  $("savenm").onclick = async () => {
+    const { error } = await sb.from("businesses").update({ name: $("nm").value.trim() }).eq("id", biz.id);
+    error ? say("Could not save.") : say("Saved.", true);
+  };
+  $("addbr").onclick = async () => {
+    const n = $("newbr").value.trim(); if (!n) return;
+    const { error } = await sb.from("branches").insert({ business_id: biz.id, name: n });
+    error ? say("Could not add branch.") : ($("newbr").value = "", load());
+  };
+  $("addst").onclick = async () => {
+    const n = $("newst").value.trim(); if (!n || !$("stbr").value) return;
+    const { error } = await sb.from("staff").insert({ business_id: biz.id, branch_id: $("stbr").value, name: n });
+    error ? say("Could not add staff.") : ($("newst").value = "", say("Added. Now tap Set PIN.", true), load());
+  };
+  $("out").onclick = async () => { await sb.auth.signOut(); biz = null; say(""); load(); };
+  load();
+</script>
+</body>
+</html>
