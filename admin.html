@@ -18,7 +18,7 @@
 </style>
 </head>
 <body><main>
-<h1>FlameBook Owner</h1>
+<h1>FlameBook Owner <small style="font-size:12px;color:#6b7280">v10</small></h1>
 <div class="msg" id="msg"></div>
 
 <div id="auth" class="card hide">
@@ -42,6 +42,10 @@
   <h2>Staff</h2><div class="card"><div id="staff"></div>
     <input id="newst" placeholder="Staff name"><select id="stbr"></select>
     <button id="addst">Add staff</button></div>
+  <h2>Set or change PIN</h2><div class="card">
+    <select id="pinst"></select>
+    <input id="pinval" type="tel" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN">
+    <button id="pinsave">Save PIN</button><div class="msg" id="pinmsg"></div></div>
   <button class="g" id="out">Logout</button>
 </div>
 </main>
@@ -49,7 +53,7 @@
 <script>
   // ====== USE THE SAME 2 VALUES AS IN index.html ======
   const SUPABASE_URL = "https://yqhvegqrtgtnhjrtjzhi.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_bMPAfVEyj2GVTESsIyw1oA_NrOSnsuZ";
+  const SUPABASE_KEY = "PASTE_PUBLISHABLE_KEY_HERE";
   // =====================================================
   const $ = (i) => document.getElementById(i);
   const say = (t, ok) => { $("msg").textContent = t || ""; $("msg").className = "msg" + (ok ? " ok" : ""); };
@@ -85,8 +89,9 @@
       const o = document.createElement("option"); o.value = x.id; o.textContent = x.name; $("stbr").appendChild(o);
     });
     const { data: st } = await sb.from("staff").select("id,name,active,branches(name)").order("created_at");
-    $("staff").innerHTML = "";
+    $("staff").innerHTML = ""; $("pinst").innerHTML = "";
     (st || []).forEach((x) => {
+      if (x.active) { const o = document.createElement("option"); o.value = x.id; o.textContent = x.name + " (" + (x.branches ? x.branches.name : "") + ")"; $("pinst").appendChild(o); }
       $("staff").appendChild(row(x.name + " (" + (x.branches ? x.branches.name : "") + ")" + (x.active ? "" : " - removed"), [
         ["Set PIN", () => setPin(x)],
         [x.active ? "Remove" : "Restore", async () => {
@@ -96,17 +101,9 @@
     });
   }
 
-  async function setPin(x) {
-    const pin = prompt("New 4-digit PIN for " + x.name);
-    if (!pin) return;
-    if (!/^[0-9]{4}$/.test(pin)) return say("PIN must be exactly 4 digits.");
-    const { data: s } = await sb.auth.getSession();
-    const r = await fetch(SUPABASE_URL + "/functions/v1/set-pin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: "Bearer " + s.session.access_token },
-      body: JSON.stringify({ staff_id: x.id, pin }),
-    });
-    r.ok ? say("PIN saved for " + x.name, true) : say("Could not save PIN.");
+  function setPin(x) {
+    $("pinst").value = x.id; $("pinval").focus();
+    $("pinmsg").className = "msg ok"; $("pinmsg").textContent = "Enter the new PIN for " + x.name + " and tap Save PIN.";
   }
 
   async function makeBiz(name) {
@@ -141,6 +138,16 @@
     const n = $("newst").value.trim(); if (!n || !$("stbr").value) return;
     const { error } = await sb.from("staff").insert({ business_id: biz.id, branch_id: $("stbr").value, name: n });
     error ? say("Could not add staff.") : ($("newst").value = "", say("Added. Now tap Set PIN.", true), load());
+  };
+  $("pinsave").onclick = async () => {
+    const pin = $("pinval").value.trim(), m = $("pinmsg");
+    m.className = "msg";
+    if (!$("pinst").value) { m.textContent = "Choose a staff member."; return; }
+    if (!/^[0-9]{4}$/.test(pin)) { m.textContent = "PIN must be exactly 4 digits."; return; }
+    m.textContent = "Saving...";
+    const { error } = await sb.rpc("owner_set_pin", { p_staff: $("pinst").value, p_pin: pin });
+    if (error) { m.textContent = "Could not save PIN: " + error.message; return; }
+    $("pinval").value = ""; m.className = "msg ok"; m.textContent = "PIN saved. Staff can log in now.";
   };
   $("out").onclick = async () => { await sb.auth.signOut(); biz = null; say(""); load(); };
   load();
