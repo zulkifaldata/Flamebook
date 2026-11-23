@@ -96,7 +96,7 @@ const SUPABASE_KEY  = "sb_publishable_bMPAfVEyj2GVTESsIyw1oA_NrOSnsuZ";
     });
   }
 
-  async function setPin(x) {
+  async function SetPin(x) {
     const pin = prompt("New 4-digit PIN for " + x.name);
     if (!pin) return;
     if (!/^[0-9]{4}$/.test(pin)) return say("PIN must be exactly 4 digits.");
