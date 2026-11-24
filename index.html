@@ -9,15 +9,15 @@
   main{max-width:420px;margin:0 auto;padding:24px 16px 40px}
   h1{color:#e8590c;margin:6px 0 16px}h1 small{font-size:12px;color:#6b7280}
   .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px;margin-bottom:12px}
-  input{width:100%;padding:13px;font-size:16px;border:1px solid #d1d5db;border-radius:10px;margin:5px 0;box-sizing:border-box}
+  input,select{width:100%;padding:13px;font-size:16px;border:1px solid #d1d5db;border-radius:10px;margin:5px 0;box-sizing:border-box}
   button{padding:12px 16px;font-size:16px;border:none;border-radius:10px;background:#e8590c;color:#fff;margin:6px 6px 0 0}
   button.g{background:#fff;color:#1b1f24;border:1px solid #d1d5db}
   .msg{min-height:20px;margin-top:8px;font-size:15px;color:#b91c1c}.ok{color:#15803d}.hide{display:none}
-  li{padding:6px 0;border-top:1px solid #eee;list-style:none}ul{padding:0;margin:10px 0 0}
+  .s{font-size:13px;color:#6b7280;margin-top:2px}li{cursor:pointer;padding:8px 0;border-top:1px solid #eee;list-style:none}ul{padding:0;margin:10px 0 0}
 </style>
 </head>
 <body><main>
-<h1>FlameBook <small>v21</small></h1>
+<h1>FlameBook <small>v22</small></h1>
 
 <div id="auth" class="card hide">
   <input id="bn" placeholder="Business name (for a new account)">
@@ -31,11 +31,16 @@
 <div id="home" class="hide">
   <div class="card"><strong id="bname"></strong>
     <button class="g" id="out" style="float:right;margin:0">Logout</button></div>
-  <div class="card"><strong>Add customer</strong>
+  <div class="card"><strong id="ft">Add customer</strong>
     <input id="cn" placeholder="Customer name">
     <input id="cp" type="tel" placeholder="Phone (optional)">
-    <button id="add">Add</button><div class="msg" id="hm"></div></div>
-  <div class="card"><strong>Customers</strong> <span id="cc"></span><ul id="cl"></ul></div>
+    <select id="ck"><option value="restaurant">Restaurant / business</option><option value="domestic">Domestic</option></select>
+    <div id="rates"></div>
+    <input id="cb" type="number" inputmode="decimal" placeholder="Opening balance owed (Rs)">
+    <button id="save">Add customer</button><button class="g hide" id="cancel">Cancel</button>
+    <div class="msg" id="hm"></div></div>
+  <div class="card"><strong>Customers</strong> <span id="cc"></span>
+    <input id="q" placeholder="Search name or phone"><ul id="cl"></ul></div>
 </div>
 </main>
 
@@ -61,14 +66,47 @@
     if (!s.session) return view("auth");
     const { data: b } = await sb.from("businesses").select("id,name").maybeSingle();
     if (!b) { view("auth"); mode("new"); return say("am", "No business on this login yet. Type your business name and tap Create account."); }
-    biz = b; mark(); $("bname").textContent = b.name; view("home"); list();
+    biz = b; mark(); $("bname").textContent = b.name; view("home"); await initProducts(); list();
+  }
+
+  let products = [], rows = [], editing = null;
+
+  async function initProducts() {
+    const { data } = await sb.from("products").select("id,name").eq("active", true).order("name");
+    products = data || []; $("rates").innerHTML = "";
+    products.forEach((p) => { const i = document.createElement("input"); i.type = "number"; i.inputMode = "decimal"; i.id = "r_" + p.id; i.placeholder = "Rate for " + p.name + " (Rs)"; $("rates").appendChild(i); });
   }
 
   async function list() {
-    const { data, error } = await sb.from("customers").select("id,name,phone").order("created_at", { ascending: false });
+    const { data, error } = await sb.from("customers").select("id,name,phone,kind,opening_balance,customer_rates(product_id,rate)").order("name");
     if (error) return say("hm", "Could not load customers: " + error.message);
-    $("cl").innerHTML = ""; $("cc").textContent = "(" + data.length + ")";
-    data.forEach((c) => { const li = document.createElement("li"); li.textContent = c.name + (c.phone ? "  -  " + c.phone : ""); $("cl").appendChild(li); });
+    rows = data; draw();
+  }
+
+  function draw() {
+    const q = $("q").value.trim().toLowerCase();
+    const f = rows.filter((c) => !q || c.name.toLowerCase().includes(q) || (c.phone || "").includes(q));
+    $("cl").innerHTML = ""; $("cc").textContent = "(" + f.length + ")";
+    f.forEach((c) => {
+      const li = document.createElement("li"), a = document.createElement("div"), b = document.createElement("div");
+      a.textContent = c.name + (c.phone ? "  -  " + c.phone : ""); b.className = "s";
+      const rt = products.map((p) => { const r = c.customer_rates.find((x) => x.product_id === p.id); return r ? p.name.split(" ")[0] + ": Rs " + r.rate : null; }).filter(Boolean).join("  |  ");
+      b.textContent = [c.kind === "domestic" ? "Domestic" : "Restaurant", rt, "Owed: Rs " + Number(c.opening_balance || 0)].filter(Boolean).join("  |  ");
+      li.appendChild(a); li.appendChild(b); li.onclick = () => edit(c); $("cl").appendChild(li);
+    });
+  }
+
+  function reset() {
+    editing = null; $("ft").textContent = "Add customer"; $("save").textContent = "Add customer"; $("cancel").classList.add("hide");
+    ["cn", "cp", "cb"].forEach((i) => ($(i).value = "")); $("ck").value = "restaurant";
+    products.forEach((p) => ($("r_" + p.id).value = ""));
+  }
+
+  function edit(c) {
+    reset(); editing = c.id; $("ft").textContent = "Edit customer"; $("save").textContent = "Save changes"; $("cancel").classList.remove("hide");
+    $("cn").value = c.name; $("cp").value = c.phone || ""; $("ck").value = c.kind; $("cb").value = c.opening_balance || "";
+    c.customer_rates.forEach((r) => { const i = $("r_" + r.product_id); if (i) i.value = r.rate; });
+    say("hm", ""); window.scrollTo(0, 0);
   }
 
   $("login").onclick = async () => {
@@ -92,15 +130,32 @@
     say("am", ""); load();
   };
 
-  $("add").onclick = async () => {
-    const n = $("cn").value.trim();
+  $("save").onclick = async () => {
+    const n = $("cn").value.trim(), bal = Number($("cb").value || 0);
     if (!n) return say("hm", "Type the customer name first.");
-    if (!branch) { const { data } = await sb.from("branches").select("id").order("created_at").limit(1).maybeSingle(); branch = data && data.id; }
-    if (!branch) return say("hm", "No branch found for this business.");
-    const { error } = await sb.from("customers").insert({ business_id: biz.id, branch_id: branch, name: n, phone: $("cp").value.trim() || null });
-    if (error) return say("hm", "Could not add: " + error.message);
-    $("cn").value = ""; $("cp").value = ""; say("hm", "Customer added.", true); list();
+    const vals = products.map((p) => ({ p, v: $("r_" + p.id).value.trim() }));
+    if (isNaN(bal) || vals.some((x) => x.v !== "" && (isNaN(Number(x.v)) || Number(x.v) < 0))) return say("hm", "Rates and balance must be numbers.");
+    say("hm", "Saving...", true);
+    const body = { name: n, phone: $("cp").value.trim() || null, kind: $("ck").value, opening_balance: bal };
+    let id = editing;
+    if (id) {
+      const { error } = await sb.from("customers").update(body).eq("id", id);
+      if (error) return say("hm", "Could not save: " + error.message);
+    } else {
+      if (!branch) { const { data } = await sb.from("branches").select("id").order("created_at").limit(1).maybeSingle(); branch = data && data.id; }
+      if (!branch) return say("hm", "No branch found for this business.");
+      const { data, error } = await sb.from("customers").insert({ ...body, business_id: biz.id, branch_id: branch }).select("id").single();
+      if (error) return say("hm", "Could not add: " + error.message);
+      id = data.id;
+    }
+    for (const x of vals) {
+      if (x.v === "") await sb.from("customer_rates").delete().eq("customer_id", id).eq("product_id", x.p.id);
+      else { const { error } = await sb.from("customer_rates").upsert({ customer_id: id, product_id: x.p.id, rate: Number(x.v) }); if (error) return say("hm", "Customer saved, but not the rates: " + error.message); }
+    }
+    reset(); say("hm", "Saved.", true); list();
   };
+  $("cancel").onclick = () => { reset(); say("hm", ""); };
+  $("q").oninput = draw;
 
   $("out").onclick = async () => { await sb.auth.signOut(); biz = null; branch = null; mode("login"); view("auth"); };
   $("tonew").onclick = (e) => { e.preventDefault(); mode("new"); };
