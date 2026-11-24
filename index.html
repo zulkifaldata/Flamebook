@@ -5,222 +5,106 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FlameBook</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --ink:#1b1f24; --muted:#6b7280; --brand:#e8590c; --brand-dark:#c2410c; --line:#e5e7eb; --err:#b91c1c; }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); min-height:100vh; display:flex; justify-content:center; }
-  main { width:100%; max-width:420px; padding:24px 16px 40px; }
-  h1 { margin:8px 0 4px; font-size:26px; color:var(--brand); }
-  .sub { color:var(--muted); margin:0 0 20px; font-size:15px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
-  .list { display:grid; gap:10px; }
-  .pick { width:100%; padding:16px; font-size:18px; border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); text-align:left; cursor:pointer; }
-  .pick:active { background:#fff3eb; border-color:var(--brand); }
-  .back { background:none; border:none; color:var(--brand-dark); font-size:15px; padding:8px 0; cursor:pointer; }
-  .dots { display:flex; justify-content:center; gap:14px; margin:14px 0 18px; }
-  .dot { width:16px; height:16px; border-radius:50%; border:2px solid var(--brand); }
-  .dot.on { background:var(--brand); }
-  .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-  .pad button { padding:18px 0; font-size:24px; border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); cursor:pointer; }
-  .pad button:active { background:#fff3eb; }
-  .msg { min-height:22px; text-align:center; font-size:15px; margin-top:12px; }
-  .msg.err { color:var(--err); }
-  .row { display:flex; gap:8px; margin-top:12px; }
-  input[type=text] { flex:1; padding:12px; font-size:16px; border:1px solid var(--line); border-radius:10px; }
-  .primary { padding:12px 16px; font-size:16px; border:none; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer; }
-  .secondary { padding:10px 14px; font-size:15px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); cursor:pointer; }
-  ul { padding-left:18px; margin:10px 0 0; }
-  .hide { display:none; }
+  body{margin:0;font-family:system-ui,Arial,sans-serif;background:#f6f7f9;color:#1b1f24}
+  main{max-width:420px;margin:0 auto;padding:24px 16px 40px}
+  h1{color:#e8590c;margin:6px 0 16px}h1 small{font-size:12px;color:#6b7280}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px;margin-bottom:12px}
+  input{width:100%;padding:13px;font-size:16px;border:1px solid #d1d5db;border-radius:10px;margin:5px 0;box-sizing:border-box}
+  button{padding:12px 16px;font-size:16px;border:none;border-radius:10px;background:#e8590c;color:#fff;margin:6px 6px 0 0}
+  button.g{background:#fff;color:#1b1f24;border:1px solid #d1d5db}
+  .msg{min-height:20px;margin-top:8px;font-size:15px;color:#b91c1c}.ok{color:#15803d}.hide{display:none}
+  li{padding:6px 0;border-top:1px solid #eee;list-style:none}ul{padding:0;margin:10px 0 0}
 </style>
 </head>
-<body>
-<main>
-  <h1>FlameBook</h1>
-  <p class="sub" id="sub">Loading...</p>
+<body><main>
+<h1>FlameBook <small>v21</small></h1>
 
-  <!-- Screen 1: branch -->
-  <section id="s-branch" class="hide"><div class="list" id="branchList"></div></section>
+<div id="auth" class="card hide">
+  <input id="bn" placeholder="Business name (for a new account)">
+  <input id="em" type="email" placeholder="Email" autocomplete="username">
+  <input id="pw" type="password" placeholder="Password (min 6 characters)" autocomplete="current-password">
+  <button id="login">Login</button><button class="g" id="signup">Create account</button>
+  <div class="msg" id="am"></div>
+  <p class="hide" id="nl" style="margin:12px 0 0"><a href="#" id="tonew" style="color:#c2410c">New business? Create account</a></p>
+</div>
 
-  <!-- Screen 2: staff name -->
-  <section id="s-staff" class="hide">
-    <button class="back" id="backToBranch">&larr; Change branch</button>
-    <div class="list" id="staffList"></div>
-  </section>
-
-  <!-- Screen 3: PIN -->
-  <section id="s-pin" class="hide">
-    <button class="back" id="backToStaff">&larr; Change name</button>
-    <div class="card">
-      <div class="dots" id="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-      <div class="pad" id="pad"></div>
-      <div class="msg" id="pinMsg"></div>
-    </div>
-  </section>
-
-  <!-- Screen 4: welcome -->
-  <section id="s-home" class="hide">
-    <div class="card">
-      <strong id="welcome"></strong>
-      <p class="sub" style="margin:6px 0 0" id="whereAmI"></p>
-      <div class="row">
-        <input type="text" id="custName" placeholder="Test customer name" autocomplete="off">
-        <button class="primary" id="addCust">Add</button>
-      </div>
-      <div class="msg" id="homeMsg"></div>
-      <div><strong>Customers in this branch</strong> <span id="custCount"></span></div>
-      <ul id="custList"></ul>
-    </div>
-    <p style="text-align:center;margin-top:16px"><button class="secondary" id="logout">Logout</button></p>
-  </section>
+<div id="home" class="hide">
+  <div class="card"><strong id="bname"></strong>
+    <button class="g" id="out" style="float:right;margin:0">Logout</button></div>
+  <div class="card"><strong>Add customer</strong>
+    <input id="cn" placeholder="Customer name">
+    <input id="cp" type="tel" placeholder="Phone (optional)">
+    <button id="add">Add</button><div class="msg" id="hm"></div></div>
+  <div class="card"><strong>Customers</strong> <span id="cc"></span><ul id="cl"></ul></div>
+</div>
 </main>
 
+<script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
-  // ====== EDIT THESE 3 LINES ======
-  const SUPABASE_URL  = "https://yqhvegqrtgtnhjrtjzhi.supabase.co";            // e.g. https://abcdxyz.supabase.co
-  const SUPABASE_KEY  = "sb_publishable_bMPAfVEyj2GVTESsIyw1oA_NrOSnsuZ";; // public key only. NEVER the secret / service_role key
-  const BUSINESS_SLUG = new URLSearchParams(location.search).get("b") || "";
-  // =================================
+  const $ = (i) => document.getElementById(i);
+  const say = (id, t, ok) => { $(id).textContent = t || ""; $(id).className = "msg" + (ok ? " ok" : ""); };
+  const view = (a) => { $("auth").classList.toggle("hide", a !== "auth"); $("home").classList.toggle("hide", a !== "home"); };
+  view("auth");
+  const seen = () => { try { return localStorage.getItem("fb_seen"); } catch (e) { return null; } };
+  const mark = () => { try { localStorage.setItem("fb_seen", "1"); } catch (e) {} };
+  const mode = (m) => { const l = m === "login"; $("bn").classList.toggle("hide", l); $("signup").classList.toggle("hide", l); $("nl").classList.toggle("hide", !l); };
+  mode(seen() ? "login" : "new");
+  if (typeof supabase === "undefined" || !window.FB || !FB.key || FB.key.indexOf("PASTE") === 0) {
+    say("am", "Open config.js on GitHub and paste your URL and key there."); throw new Error("config");
+  }
+  const sb = supabase.createClient(FB.url, FB.key);
+  let biz = null, branch = null;
 
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  const $ = (id) => document.getElementById(id);
-  const screens = ["s-branch", "s-staff", "s-pin", "s-home"];
-  let chosenBranch = null, chosenStaff = null, pin = "", busy = false, me = null;
-
-  function show(id, subtitle) {
-    screens.forEach((s) => $(s).classList.toggle("hide", s !== id));
-    $("sub").textContent = subtitle;
+  async function load() {
+    const { data: s } = await sb.auth.getSession();
+    if (!s.session) return view("auth");
+    const { data: b } = await sb.from("businesses").select("id,name").maybeSingle();
+    if (!b) { view("auth"); mode("new"); return say("am", "No business on this login yet. Type your business name and tap Create account."); }
+    biz = b; mark(); $("bname").textContent = b.name; view("home"); list();
   }
 
-  function makeButton(text, onClick) {
-    const b = document.createElement("button");
-    b.className = "pick";
-    b.textContent = text;
-    b.onclick = onClick;
-    return b;
+  async function list() {
+    const { data, error } = await sb.from("customers").select("id,name,phone").order("created_at", { ascending: false });
+    if (error) return say("hm", "Could not load customers: " + error.message);
+    $("cl").innerHTML = ""; $("cc").textContent = "(" + data.length + ")";
+    data.forEach((c) => { const li = document.createElement("li"); li.textContent = c.name + (c.phone ? "  -  " + c.phone : ""); $("cl").appendChild(li); });
   }
 
-  async function loadBranches() {
-    show("s-branch", "Choose your branch");
-    const { data, error } = await sb.rpc("login_branches", { p_slug: BUSINESS_SLUG });
-    const box = $("branchList");
-    box.innerHTML = "";
-    if (error || !data || !data.length) { box.textContent = "Could not load branches. Check the URL and key at the top of this file."; return; }
-    data.forEach((b) => box.appendChild(makeButton(b.name, () => { chosenBranch = b; loadStaff(); })));
-  }
-
-  async function loadStaff() {
-    show("s-staff", chosenBranch.name);
-    const { data, error } = await sb.rpc("login_staff", { p_branch: chosenBranch.id });
-    const box = $("staffList");
-    box.innerHTML = "";
-    if (error || !data || !data.length) { box.textContent = "No staff found for this branch."; return; }
-    data.forEach((s) => box.appendChild(makeButton(s.name, () => { chosenStaff = s; startPin(); })));
-  }
-
-  function buildPad() {
-    const pad = $("pad");
-    pad.innerHTML = "";
-    ["1","2","3","4","5","6","7","8","9","C","0","\u232B"].forEach((k) => {
-      const b = document.createElement("button");
-      b.textContent = k;
-      b.onclick = () => press(k);
-      pad.appendChild(b);
-    });
-  }
-
-  function startPin() {
-    pin = "";
-    paintDots();
-    setPinMsg("", false);
-    show("s-pin", "Hello " + chosenStaff.name + ", enter your PIN");
-  }
-
-  function paintDots() {
-    document.querySelectorAll("#dots .dot").forEach((d, i) => d.classList.toggle("on", i < pin.length));
-  }
-
-  function setPinMsg(t, isErr) {
-    $("pinMsg").textContent = t;
-    $("pinMsg").className = "msg" + (isErr ? " err" : "");
-  }
-
-  function press(k) {
-    if (busy) return;
-    if (k === "C") pin = "";
-    else if (k === "\u232B") pin = pin.slice(0, -1);
-    else if (pin.length < 4) pin += k;
-    paintDots();
-    if (pin.length === 4) submitPin();
-  }
-
-  async function submitPin() {
-    busy = true;
-    setPinMsg("Checking...", false);
-    try {
-      const res = await fetch(SUPABASE_URL + "/functions/v1/Staff-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
-        body: JSON.stringify({ staff_id: chosenStaff.id, pin }),
-      });
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.error || "Login failed");
-      const { error } = await sb.auth.setSession({ access_token: out.access_token, refresh_token: out.refresh_token });
-      if (error) throw error;
-      await loadHome();
-    } catch (e) {
-      pin = "";
-      paintDots();
-      setPinMsg(e.message === "Wrong PIN or account locked"
-        ? "Wrong PIN, or locked for 15 minutes after 5 wrong tries."
-        : "Login failed. Try again.", true);
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function loadHome() {
-    const { data: u } = await sb.auth.getUser();
-    if (!u || !u.user) return loadBranches();
-    const { data: row, error } = await sb
-      .from("staff")
-      .select("name, business_id, branch_id, branches(name)")
-      .eq("auth_user_id", u.user.id)
-      .single();
-    if (error || !row) { await sb.auth.signOut(); return loadBranches(); }
-    me = row;
-    $("welcome").textContent = "Welcome " + row.name;
-    $("whereAmI").textContent = "Branch: " + (row.branches ? row.branches.name : "");
-    show("s-home", "You are logged in");
-    await loadCustomers();
-  }
-
-  async function loadCustomers() {
-    const { data, error } = await sb.from("customers").select("id, name").order("created_at", { ascending: false });
-    const ul = $("custList");
-    ul.innerHTML = "";
-    if (error) { $("homeMsg").textContent = "Could not load customers."; return; }
-    $("custCount").textContent = "(" + data.length + ")";
-    data.forEach((c) => { const li = document.createElement("li"); li.textContent = c.name; ul.appendChild(li); });
-  }
-
-  $("addCust").onclick = async () => {
-    const name = $("custName").value.trim();
-    if (!name || !me) return;
-    const { error } = await sb.from("customers").insert({ name, business_id: me.business_id, branch_id: me.branch_id });
-    $("homeMsg").textContent = error ? "Could not add customer." : "Added.";
-    $("homeMsg").className = "msg" + (error ? " err" : "");
-    if (!error) { $("custName").value = ""; await loadCustomers(); }
+  $("login").onclick = async () => {
+    say("am", "Logging in...", true);
+    const { error } = await sb.auth.signInWithPassword({ email: $("em").value.trim(), password: $("pw").value });
+    if (error) return say("am", "Login error: " + error.message);
+    say("am", ""); load();
   };
 
-  $("logout").onclick = async () => { await sb.auth.signOut(); me = null; loadBranches(); };
-  $("backToBranch").onclick = loadBranches;
-  $("backToStaff").onclick = loadStaff;
+  $("signup").onclick = async () => {
+    const n = $("bn").value.trim(), e = $("em").value.trim(), p = $("pw").value;
+    if (!n || !e || !p) return say("am", "Fill in business name, email and password.");
+    say("am", "Creating...", true);
+    const { data, error } = await sb.auth.signUp({ email: e, password: p });
+    if (error) {
+      const r = await sb.auth.signInWithPassword({ email: e, password: p });
+      if (r.error) return say("am", "Could not create account: " + error.message);
+    } else if (!data.session) return say("am", "Check your email to confirm, then tap Login.", true);
+    const { data: ex } = await sb.from("businesses").select("id").maybeSingle();
+    if (!ex) { const r = await sb.rpc("create_business", { p_name: n }); if (r.error) return say("am", "Could not create business: " + r.error.message); }
+    say("am", ""); load();
+  };
 
-  buildPad();
-  (async () => {
-    const { data } = await sb.auth.getSession();
-    if (data && data.session) await loadHome(); else await loadBranches();
-  })();
+  $("add").onclick = async () => {
+    const n = $("cn").value.trim();
+    if (!n) return say("hm", "Type the customer name first.");
+    if (!branch) { const { data } = await sb.from("branches").select("id").order("created_at").limit(1).maybeSingle(); branch = data && data.id; }
+    if (!branch) return say("hm", "No branch found for this business.");
+    const { error } = await sb.from("customers").insert({ business_id: biz.id, branch_id: branch, name: n, phone: $("cp").value.trim() || null });
+    if (error) return say("hm", "Could not add: " + error.message);
+    $("cn").value = ""; $("cp").value = ""; say("hm", "Customer added.", true); list();
+  };
+
+  $("out").onclick = async () => { await sb.auth.signOut(); biz = null; branch = null; mode("login"); view("auth"); };
+  $("tonew").onclick = (e) => { e.preventDefault(); mode("new"); };
+  load();
 </script>
 </body>
 </html>
