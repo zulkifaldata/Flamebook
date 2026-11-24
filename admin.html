@@ -18,7 +18,7 @@
 </style>
 </head>
 <body><main>
-<h1>FlameBook Owner <small style="font-size:12px;color:#6b7280">v10</small></h1>
+<h1>FlameBook Owner <small style="font-size:12px;color:#6b7280">v11</small></h1>
 <div class="msg" id="msg"></div>
 
 <div id="auth" class="card hide">
@@ -38,10 +38,10 @@
     <input id="nm"><button id="savenm">Save</button>
     <p style="margin:10px 0 2px">Staff login link (share with your staff):</p><div id="link"></div></div>
   <h2>Branches</h2><div class="card"><div id="branches"></div>
-    <input id="newbr" placeholder="New branch name"><button id="addbr">Add branch</button></div>
+    <input id="newbr" placeholder="New branch name"><button id="addbr">Add branch</button><div class="msg" id="brmsg"></div></div>
   <h2>Staff</h2><div class="card"><div id="staff"></div>
     <input id="newst" placeholder="Staff name"><select id="stbr"></select>
-    <button id="addst">Add staff</button></div>
+    <button id="addst">Add staff</button><div class="msg" id="stmsg"></div></div>
   <h2>Set or change PIN</h2><div class="card">
     <select id="pinst"></select>
     <input id="pinval" type="tel" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN">
@@ -49,15 +49,16 @@
   <button class="g" id="out">Logout</button>
 </div>
 </main>
+<script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
   // ====== USE THE SAME 2 VALUES AS IN index.html ======
-  const SUPABASE_URL = "https://yqhvegqrtgtnhjrtjzhi.supabase.co";
-  const SUPABASE_KEY = "PASTE_PUBLISHABLE_KEY_HERE";
+  const SUPABASE_URL = (window.FB || {}).url || "PASTE";
+  const SUPABASE_KEY = (window.FB || {}).key || "PASTE";
   // =====================================================
   const $ = (i) => document.getElementById(i);
   const say = (t, ok) => { $("msg").textContent = t || ""; $("msg").className = "msg" + (ok ? " ok" : ""); };
-  if (typeof supabase === "undefined" || SUPABASE_URL.indexOf("PASTE") === 0) { say("Edit the URL and key at the top of admin.html."); throw new Error("config"); }
+  if (typeof supabase === "undefined" || SUPABASE_URL.indexOf("PASTE") === 0 || SUPABASE_KEY.indexOf("PASTE") === 0) { say("Open config.js on GitHub and paste your URL and key there."); throw new Error("config"); }
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   let biz = null;
 
@@ -114,7 +115,7 @@
 
   $("login").onclick = async () => {
     const { error } = await sb.auth.signInWithPassword({ email: $("email").value.trim(), password: $("pass").value });
-   error ? say("Login error: " + error.message) : (say(""), load());
+    error ? say("Login error: " + error.message) : (say(""), load());
   };
   $("signup").onclick = async () => {
     const name = $("bname").value;
@@ -129,15 +130,23 @@
     const { error } = await sb.from("businesses").update({ name: $("nm").value.trim() }).eq("id", biz.id);
     error ? say("Could not save.") : say("Saved.", true);
   };
+  const note = (id, t, ok) => { $(id).textContent = t; $(id).className = "msg" + (ok ? " ok" : ""); };
   $("addbr").onclick = async () => {
-    const n = $("newbr").value.trim(); if (!n) return;
+    const n = $("newbr").value.trim();
+    if (!n) return note("brmsg", "Type the branch name first.");
+    note("brmsg", "Adding...", true);
     const { error } = await sb.from("branches").insert({ business_id: biz.id, name: n });
-    error ? say("Could not add branch.") : ($("newbr").value = "", load());
+    if (error) return note("brmsg", "Could not add branch: " + error.message);
+    $("newbr").value = ""; note("brmsg", "Branch added.", true); load();
   };
   $("addst").onclick = async () => {
-    const n = $("newst").value.trim(); if (!n || !$("stbr").value) return;
+    const n = $("newst").value.trim();
+    if (!n) return note("stmsg", "Type the staff name first.");
+    if (!$("stbr").value) return note("stmsg", "Add a branch first, then choose it here.");
+    note("stmsg", "Adding...", true);
     const { error } = await sb.from("staff").insert({ business_id: biz.id, branch_id: $("stbr").value, name: n });
-    error ? say("Could not add staff.") : ($("newst").value = "", say("Added. Now tap Set PIN.", true), load());
+    if (error) return note("stmsg", "Could not add staff: " + error.message);
+    $("newst").value = ""; note("stmsg", "Staff added. Now choose them in Set or change PIN below.", true); load();
   };
   $("pinsave").onclick = async () => {
     const pin = $("pinval").value.trim(), m = $("pinmsg");
