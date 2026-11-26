@@ -13,11 +13,11 @@
   button{padding:12px 16px;font-size:16px;border:none;border-radius:10px;background:#e8590c;color:#fff;margin:6px 6px 0 0}
   button.g{background:#fff;color:#1b1f24;border:1px solid #d1d5db}
   .msg{min-height:20px;margin-top:8px;font-size:15px;color:#b91c1c}.ok{color:#15803d}.hide{display:none}
-  .s{font-size:13px;color:#6b7280;margin-top:2px}li{cursor:pointer;padding:8px 0;border-top:1px solid #eee;list-style:none}ul{padding:0;margin:10px 0 0}
+  .s{font-size:13px;color:#6b7280;margin-top:2px}.row{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid #eee}.g3{display:flex;gap:6px}.g3 input{margin:3px 0}li{cursor:pointer;padding:8px 0;border-top:1px solid #eee;list-style:none}ul{padding:0;margin:10px 0 0}
 </style>
 </head>
 <body><main>
-<h1>FlameBook <small>v22</small></h1>
+<h1>FlameBook <small>v23</small></h1>
 
 <div id="auth" class="card hide">
   <input id="bn" placeholder="Business name (for a new account)">
@@ -31,6 +31,13 @@
 <div id="home" class="hide">
   <div class="card"><strong id="bname"></strong>
     <button class="g" id="out" style="float:right;margin:0">Logout</button></div>
+  <div class="card" id="dash"></div>
+  <div class="card"><strong>New entry</strong>
+    <select id="ec"></select>
+    <input id="ed" type="date">
+    <div id="el"></div>
+    <input id="ecash" type="number" inputmode="decimal" placeholder="Cash received (Rs)">
+    <button id="esave">Save entry</button><div class="msg" id="em"></div></div>
   <div class="card"><strong id="ft">Add customer</strong>
     <input id="cn" placeholder="Customer name">
     <input id="cp" type="tel" placeholder="Phone (optional)">
@@ -41,6 +48,7 @@
     <div class="msg" id="hm"></div></div>
   <div class="card"><strong>Customers</strong> <span id="cc"></span>
     <input id="q" placeholder="Search name or phone"><ul id="cl"></ul></div>
+  <div class="card hide" id="st"></div>
 </div>
 </main>
 
@@ -75,12 +83,13 @@
     const { data } = await sb.from("products").select("id,name").eq("active", true).order("name");
     products = data || []; $("rates").innerHTML = "";
     products.forEach((p) => { const i = document.createElement("input"); i.type = "number"; i.inputMode = "decimal"; i.id = "r_" + p.id; i.placeholder = "Rate for " + p.name + " (Rs)"; $("rates").appendChild(i); });
+    buildEntry();
   }
 
   async function list() {
     const { data, error } = await sb.from("customers").select("id,name,phone,kind,opening_balance,customer_rates(product_id,rate)").order("name");
     if (error) return say("hm", "Could not load customers: " + error.message);
-    rows = data; draw();
+    rows = data; await loadEnts(); fillCust(); draw(); dash();
   }
 
   function draw() {
@@ -91,8 +100,8 @@
       const li = document.createElement("li"), a = document.createElement("div"), b = document.createElement("div");
       a.textContent = c.name + (c.phone ? "  -  " + c.phone : ""); b.className = "s";
       const rt = products.map((p) => { const r = c.customer_rates.find((x) => x.product_id === p.id); return r ? p.name.split(" ")[0] + ": Rs " + r.rate : null; }).filter(Boolean).join("  |  ");
-      b.textContent = [c.kind === "domestic" ? "Domestic" : "Restaurant", rt, "Owed: Rs " + Number(c.opening_balance || 0)].filter(Boolean).join("  |  ");
-      li.appendChild(a); li.appendChild(b); li.onclick = () => edit(c); $("cl").appendChild(li);
+      b.textContent = [c.kind === "domestic" ? "Domestic" : "Restaurant", rt, "Owed: " + rs(balOf(c))].filter(Boolean).join("  |  ");
+      const bt = document.createElement("div"); bt.append(mk("Statement", () => stmt(c)), mk("Edit", () => edit(c))); li.append(a, b, bt); $("cl").appendChild(li);
     });
   }
 
@@ -108,6 +117,91 @@
     c.customer_rates.forEach((r) => { const i = $("r_" + r.product_id); if (i) i.value = r.rate; });
     say("hm", ""); window.scrollTo(0, 0);
   }
+
+  let ents = [];
+  const mk = (t, f) => { const b = document.createElement("button"); b.className = "g"; b.textContent = t; b.style.cssText = "padding:6px 12px;font-size:14px;margin:6px 6px 0 0"; b.onclick = f; return b; };
+  const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  const rs = (n) => "Rs " + Math.round(n).toLocaleString("en-US");
+  const amt = (e) => e.entry_lines.reduce((t, l) => t + l.delivered * Number(l.rate), 0);
+  const live = (cid) => ents.filter((e) => !e.void && (!cid || e.customer_id === cid));
+  const balOf = (c) => Number(c.opening_balance || 0) + live(c.id).reduce((t, e) => t + amt(e) - Number(e.cash), 0);
+
+  async function loadEnts() {
+    const { data, error } = await sb.from("entries").select("id,customer_id,entry_date,cash,void,created_at,entry_lines(product_id,delivered,returned,rate)").order("entry_date", { ascending: false }).order("created_at", { ascending: false });
+    if (error) return say("em", "Could not load entries: " + error.message);
+    ents = data;
+  }
+
+  function buildEntry() {
+    $("el").innerHTML = ""; $("ed").value = today();
+    products.forEach((p) => {
+      const t = document.createElement("div"); t.className = "s"; t.textContent = p.name + ": delivered | empties back | rate";
+      const g = document.createElement("div"); g.className = "g3";
+      [["ed_", "Out"], ["er_", "Back"], ["ep_", "Rate"]].forEach(([k, ph]) => { const i = document.createElement("input"); i.type = "number"; i.inputMode = "decimal"; i.id = k + p.id; i.placeholder = ph; g.appendChild(i); });
+      $("el").append(t, g);
+    });
+  }
+
+  function fillCust() {
+    const keep = $("ec").value; $("ec").innerHTML = "";
+    rows.forEach((c) => { const o = document.createElement("option"); o.value = c.id; o.textContent = c.name; $("ec").appendChild(o); });
+    if (keep) $("ec").value = keep;
+    fillRates();
+  }
+
+  function fillRates() {
+    const c = rows.find((x) => x.id === $("ec").value);
+    products.forEach((p) => { const r = c && c.customer_rates.find((x) => x.product_id === p.id); $("ep_" + p.id).value = r ? r.rate : ""; });
+  }
+
+  function dash() {
+    const td = live().filter((e) => e.entry_date === today());
+    const pend = products.map((p) => { let d = 0, r = 0; live().forEach((e) => e.entry_lines.forEach((l) => { if (l.product_id === p.id) { d += l.delivered; r += l.returned; } })); return p.name.split(" ")[0] + ": " + (d - r); }).join("  |  ");
+    $("dash").innerHTML = "";
+    [["Today sales", rs(td.reduce((s, e) => s + amt(e), 0))], ["Cash today", rs(td.reduce((s, e) => s + Number(e.cash), 0))], ["Total credit owed", rs(rows.reduce((s, c) => s + balOf(c), 0))], ["Empties pending", pend || "0"]].forEach(([k, v]) => {
+      const r = document.createElement("div"); r.className = "row"; const a = document.createElement("span"), b = document.createElement("strong");
+      a.textContent = k; b.textContent = v; r.append(a, b); $("dash").appendChild(r);
+    });
+  }
+
+  function stmt(c) {
+    const box = $("st"); box.innerHTML = ""; box.classList.remove("hide");
+    const h = document.createElement("strong"); h.textContent = c.name + " - balance " + rs(balOf(c)); box.appendChild(h);
+    const o = document.createElement("div"); o.className = "s"; o.textContent = "Opening balance " + rs(c.opening_balance || 0); box.append(o, mk("Close", () => box.classList.add("hide")));
+    ents.filter((e) => e.customer_id === c.id).forEach((e) => {
+      const r = document.createElement("div"); r.className = "row"; r.style.alignItems = "center";
+      const lines = e.entry_lines.filter((l) => l.delivered || l.returned).map((l) => { const p = products.find((x) => x.id === l.product_id); return (p ? p.name.split(" ")[0] : "?") + " out " + l.delivered + " back " + l.returned; }).join(", ");
+      const t = document.createElement("span"); t.style.fontSize = "14px";
+      t.textContent = e.entry_date + ": " + (lines || "no cylinders") + " | bill " + rs(amt(e)) + " | cash " + rs(e.cash) + (e.void ? " | CANCELLED" : "");
+      r.appendChild(t);
+      if (!e.void) r.appendChild(mk("Cancel", async () => {
+        if (!confirm("Cancel this entry?")) return;
+        const { error } = await sb.from("entries").update({ void: true }).eq("id", e.id);
+        if (error) return say("em", "Could not cancel: " + error.message);
+        await loadEnts(); draw(); dash(); stmt(c);
+      }));
+      box.appendChild(r);
+    });
+    box.scrollIntoView();
+  }
+
+  $("ec").onchange = fillRates;
+  $("esave").onclick = async () => {
+    const cid = $("ec").value; if (!cid) return say("em", "Add a customer first.");
+    const cash = Number($("ecash").value || 0);
+    const lines = products.map((p) => ({ product_id: p.id, delivered: Number($("ed_" + p.id).value || 0), returned: Number($("er_" + p.id).value || 0), rate: Number($("ep_" + p.id).value || 0) }));
+    if ([cash, ...lines.flatMap((l) => [l.delivered, l.returned, l.rate])].some((n) => isNaN(n) || n < 0)) return say("em", "Numbers only, no negatives.");
+    if (lines.some((l) => !Number.isInteger(l.delivered) || !Number.isInteger(l.returned))) return say("em", "Cylinder counts must be whole numbers.");
+    if (!cash && !lines.some((l) => l.delivered || l.returned)) return say("em", "Enter cylinders or cash first.");
+    if (lines.some((l) => l.delivered && !l.rate)) return say("em", "Enter a rate for the delivered cylinders.");
+    say("em", "Saving...", true);
+    const { data, error } = await sb.from("entries").insert({ business_id: biz.id, customer_id: cid, entry_date: $("ed").value || today(), cash }).select("id").single();
+    if (error) return say("em", "Could not save: " + error.message);
+    const { error: e2 } = await sb.from("entry_lines").insert(lines.map((l) => ({ ...l, entry_id: data.id })));
+    if (e2) { await sb.from("entries").delete().eq("id", data.id); return say("em", "Could not save: " + e2.message); }
+    products.forEach((p) => { $("ed_" + p.id).value = ""; $("er_" + p.id).value = ""; }); $("ecash").value = "";
+    say("em", "Entry saved.", true); await loadEnts(); draw(); dash();
+  };
 
   $("login").onclick = async () => {
     say("am", "Logging in...", true);
